@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Fortnite Turnier Leaderboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+  <div id="app" class="w-full max-w-5xl p-6"></div>
+
+  <script>
+    // ---- Speicherfunktionen ----
+    function saveData(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+    function loadData(key, fallback) {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : fallback;
+    }
+
+    // ---- Datenstrukturen ----
+    let players = loadData("players", []);
+    let elimPoints = loadData("elimPoints", 1); // Punkte pro Kill
+    let placementRules = loadData("placementRules", [
+      { place: 1, points: 10 },
+      { place: 2, points: 7 },
+      { place: 3, points: 5 }
+    ]);
+
+    // ---- Punkte-Berechnung ----
+    function calculatePoints(player) {
+      let placementPoints = 0;
+      const rule = placementRules.find(r => r.place === player.placement);
+      if (rule) placementPoints = rule.points;
+      return (player.elims * elimPoints) + placementPoints;
+    }
+
+    // ---- Leaderboard Ansicht ----
+    function renderLeaderboard() {
+      const container = document.getElementById("app");
+      players.forEach(p => p.points = calculatePoints(p));
+      players.sort((a,b) => b.points - a.points);
+
+      container.innerHTML = `
+        <h1 class="text-3xl font-bold mb-6 text-center">Fortnite Turnier Leaderboard</h1>
+        <div class="overflow-x-auto">
+          <table class="table-auto w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-gray-800">
+                <th class="p-2">Platz</th>
+                <th class="p-2">Spieler</th>
+                <th class="p-2">Elims</th>
+                <th class="p-2">Placement</th>
+                <th class="p-2">Punkte</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${players.map((p,i)=>`
+                <tr class="odd:bg-gray-700 even:bg-gray-800">
+                  <td class="p-2">${i+1}</td>
+                  <td class="p-2">${p.name}</td>
+                  <td class="p-2">${p.elims}</td>
+                  <td class="p-2">${p.placement}</td>
+                  <td class="p-2 font-bold">${p.points}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-6 text-center text-gray-400">⚙️ Admin? Öffne <code>?admin=1</code></p>
+      `;
+    }
+
+    // ---- Admin Ansicht ----
+    function renderAdmin() {
+      const container = document.getElementById("app");
+      container.innerHTML = `
+        <h1 class="text-3xl font-bold mb-6 text-center">⚙️ Einstellungen</h1>
+
+        <div class="mb-6">
+          <label class="block mb-2">Punkte pro Elim:</label>
+          <input type="number" id="elimInput" value="${elimPoints}" class="p-2 text-black rounded w-32">
+        </div>
+
+        <h2 class="text-2xl font-semibold mb-2">Placement-Regeln</h2>
+        <div id="rules" class="space-y-2 mb-4">
+          ${placementRules.map((r,i)=>`
+            <div class="flex gap-2 items-center">
+              <input type="number" value="${r.place}" data-index="${i}" data-type="place" class="p-1 w-20 text-black rounded">
+              <span>=</span>
+              <input type="number" value="${r.points}" data-index="${i}" data-type="points" class="p-1 w-20 text-black rounded">
+              <button data-index="${i}" class="removeRule bg-red-500 px-2 py-1 rounded">X</button>
+            </div>
+          `).join("")}
+        </div>
+        <button id="addRule" class="bg-blue-500 px-3 py-1 rounded">+ Regel hinzufügen</button>
+
+        <h2 class="text-2xl font-semibold mt-6 mb-2">Spieler</h2>
+        <div id="players" class="space-y-2 mb-4">
+          ${players.map((p,i)=>`
+            <div class="flex gap-2 items-center">
+              <input type="text" value="${p.name}" data-index="${i}" data-type="name" class="p-1 w-40 text-black rounded">
+              <input type="number" value="${p.elims}" data-index="${i}" data-type="elims" class="p-1 w-20 text-black rounded">
+              <input type="number" value="${p.placement}" data-index="${i}" data-type="placement" class="p-1 w-20 text-black rounded">
+              <button data-index="${i}" class="removePlayer bg-red-500 px-2 py-1 rounded">X</button>
+            </div>
+          `).join("")}
+        </div>
+        <button id="addPlayer" class="bg-green-500 px-3 py-1 rounded">+ Spieler hinzufügen</button>
+
+        <div class="mt-8 flex justify-between">
+          <a href="index.html" class="bg-gray-700 px-3 py-2 rounded">⬅️ Zum Leaderboard</a>
+          <button id="saveBtn" class="bg-yellow-500 px-4 py-2 rounded font-bold">Speichern</button>
+        </div>
+      `;
+
+      // --- Event Listeners ---
+      document.getElementById("elimInput").addEventListener("input", e=>{
+        elimPoints = parseInt(e.target.value)||0;
+      });
+
+      document.querySelectorAll("#rules input").forEach(input=>{
+        input.addEventListener("input", e=>{
+          const i = e.target.dataset.index;
+          const type = e.target.dataset.type;
+          placementRules[i][type] = parseInt(e.target.value)||0;
+        });
+      });
+
+      document.querySelectorAll(".removeRule").forEach(btn=>{
+        btn.addEventListener("click", e=>{
+          const i = e.target.dataset.index;
+          placementRules.splice(i,1);
+          renderAdmin();
+        });
+      });
+
+      document.getElementById("addRule").addEventListener("click", ()=>{
+        placementRules.push({place: placementRules.length+1, points:0});
+        renderAdmin();
+      });
+
+      document.querySelectorAll("#players input").forEach(input=>{
+        input.addEventListener("input", e=>{
+          const i = e.target.dataset.index;
+          const type = e.target.dataset.type;
+          players[i][type] = type==="name"? e.target.value : parseInt(e.target.value)||0;
+        });
+      });
+
+      document.querySelectorAll(".removePlayer").forEach(btn=>{
+        btn.addEventListener("click", e=>{
+          const i = e.target.dataset.index;
+          players.splice(i,1);
+          renderAdmin();
+        });
+      });
+
+      document.getElementById("addPlayer").addEventListener("click", ()=>{
+        players.push({name:"Neuer Spieler", elims:0, placement:0});
+        renderAdmin();
+      });
+
+      document.getElementById("saveBtn").addEventListener("click", ()=>{
+        saveData("players", players);
+        saveData("elimPoints", elimPoints);
+        saveData("placementRules", placementRules);
+        alert("Gespeichert!");
+      });
+    }
+
+    // ---- Start ----
+    if (window.location.search.includes("admin=1")) {
+      renderAdmin();
+    } else {
+      renderLeaderboard();
+    }
+  </script>
+</body>
+</html>
